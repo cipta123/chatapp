@@ -1,50 +1,86 @@
-# Welcome to your Expo app 👋
+# Student Chat Application
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A real-time chat application built with Expo (React Native) and PHP, featuring friend requests and instant messaging.
 
-## Get started
+## Features
 
-1. Install dependencies
+- 👥 User Authentication
+- 💬 Real-time Chat
+- 🤝 Friend Request System
+- 🔔 Real-time Notifications
+- 🎨 Modern UI Design
 
+## Prerequisites
+
+- [XAMPP](https://www.apachefriends.org/) (or similar local server with PHP and MySQL)
+- [Node.js](https://nodejs.org/)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/)
+- [MySQL](https://www.mysql.com/)
+
+## Installation
+
+1. Clone the repository
+   ```bash
+   git clone [your-repository-url]
+   cd LoginApp
+   ```
+
+2. Install Node dependencies
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Database Setup
+   - Start XAMPP and ensure MySQL service is running
+   - Create a new database named `student_chat_db`
+   - Import the database structure from `websocket/student_chat_db.sql`
+   - Copy `api/db_connect.example.php` to `api/db_connect.php` and update the credentials
 
+4. Configure WebSocket Server
+   - Navigate to the websocket directory
+   - Start the WebSocket server:
+     ```bash
+     php server.php
+     ```
+
+5. Start the Expo development server
    ```bash
-    npx expo start
+   npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+## Project Structure
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- `/api` - PHP backend APIs
+- `/app` - React Native frontend screens and components
+- `/websocket` - WebSocket server for real-time communication
+- `/components` - Reusable React components
+- `/assets` - Images and other static assets
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Development
 
-## Get a fresh project
+1. Backend Development
+   - Place PHP files in the `/api` directory
+   - Access APIs through `http://localhost/LoginApp/api/`
 
-When you're ready, run:
+2. Frontend Development
+   - Main screens are in `/app/(tabs)`
+   - Components are in `/components`
+   - Use the Expo development server for testing
 
-```bash
-npm run reset-project
-```
+## Contributing
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## Learn more
+## License
 
-To learn more about developing your project with Expo, look at the following resources:
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Acknowledgments
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Built with [Expo](https://expo.dev/)
+- WebSocket implementation using [Ratchet](http://socketo.me/)
+- UI components inspired by modern chat applications
