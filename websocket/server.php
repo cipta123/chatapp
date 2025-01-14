@@ -95,6 +95,12 @@ class ChatServer implements \Ratchet\MessageComponentInterface {
                 
             case 'message':
                 try {
+                    // Validate required fields
+                    if (!isset($data['senderId']) || !isset($data['conversationId']) || !isset($data['message'])) {
+                        echo "Missing required fields for message\n";
+                        return;
+                    }
+
                     echo "Processing message from user {$data['senderId']} to conversation {$data['conversationId']}\n";
                     
                     // Store message in database
@@ -111,46 +117,110 @@ class ChatServer implements \Ratchet\MessageComponentInterface {
                     // Update conversation timestamp
                     $stmt = $this->conn->prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?");
                     $stmt->bind_param("i", $data['conversationId']);
-                    $stmt->execute();
+                    if (!$stmt->execute()) {
+                        echo "Error updating conversation timestamp: " . $stmt->error . "\n";
+                    }
 
                     // Get sender information
                     $stmt = $this->conn->prepare("SELECT name, nim FROM students WHERE id = ?");
                     $stmt->bind_param("i", $data['senderId']);
-                    $stmt->execute();
+                    if (!$stmt->execute()) {
+                        echo "Error getting sender information: " . $stmt->error . "\n";
+                        return;
+                    }
                     $senderResult = $stmt->get_result();
                     $sender = $senderResult->fetch_assoc();
                     
-                    // Get conversation participants
-                    $stmt = $this->conn->prepare("SELECT student_id FROM conversation_participants WHERE conversation_id = ?");
-                    $stmt->bind_param("i", $data['conversationId']);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    
-                    $messageData = [
-                        'type' => 'new_message',
-                        'message' => [
-                            'id' => $messageId,
-                            'conversation_id' => $data['conversationId'],
-                            'sender_id' => $data['senderId'],
-                            'text' => $data['message'],
-                            'created_at' => date('Y-m-d H:i:s'),
-                            'sender_name' => $sender['name'],
-                            'sender_nim' => $sender['nim']
-                        ]
-                    ];
+                    if (!$sender) {
+                        echo "Sender not found\n";
+                        return;
+                    }
 
-                    echo "Sending message to participants:\n";
-                    // Send to all participants
-                    while ($row = $result->fetch_assoc()) {
-                        $participantId = $row['student_id'];
-                        echo "- Checking participant $participantId\n";
-                        if (isset($this->userConnections[$participantId])) {
-                            echo "  - Sending to participant $participantId\n";
-                            $this->userConnections[$participantId]->send(json_encode($messageData));
+                    // Get all participants in all conversations of the sender
+                    $stmt = $this->conn->prepare("
+                        SELECT DISTINCT cp.student_id, c.id as conversation_id
+                        FROM conversation_participants cp
+                        JOIN conversations c ON cp.conversation_id = c.id
+                        WHERE cp.student_id IN (
+                            SELECT student_id 
+                            FROM conversation_participants 
+                            WHERE conversation_id IN (
+                                SELECT conversation_id 
+                                FROM conversation_participants 
+                                WHERE student_id = ?
+                            )
+                        )
+                    ");
+                    $stmt->bind_param("i", $data['senderId']);
+                    $stmt->execute();
+                    $participantsResult = $stmt->get_result();
+                    
+                    // For each participant, get their unread count and last message
+                    while ($participant = $participantsResult->fetch_assoc()) {
+                        $participantId = $participant['student_id'];
+                        
+                        // Get unread count for this participant
+                        $unreadStmt = $this->conn->prepare("
+                            SELECT COUNT(*) as count
+                            FROM messages m
+                            WHERE m.conversation_id = ?
+                            AND m.created_at > COALESCE(
+                                (SELECT last_read_at 
+                                FROM conversation_participants 
+                                WHERE conversation_id = ? 
+                                AND student_id = ?),
+                                '1970-01-01'
+                            )
+                            AND m.sender_id != ?
+                        ");
+                        $unreadStmt->bind_param("iiii", 
+                            $participant['conversation_id'],
+                            $participant['conversation_id'],
+                            $participantId,
+                            $participantId
+                        );
+                        $unreadStmt->execute();
+                        $unreadCount = $unreadStmt->get_result()->fetch_assoc()['count'];
+
+                        // Get last message for this conversation
+                        $lastMsgStmt = $this->conn->prepare("
+                            SELECT m.*, s.name as sender_name
+                            FROM messages m
+                            JOIN students s ON m.sender_id = s.id
+                            WHERE m.conversation_id = ?
+                            ORDER BY m.created_at DESC
+                            LIMIT 1
+                        ");
+                        $lastMsgStmt->bind_param("i", $participant['conversation_id']);
+                        $lastMsgStmt->execute();
+                        $lastMessage = $lastMsgStmt->get_result()->fetch_assoc();
+
+                        // Only send update if we have a valid last message
+                        if ($lastMessage && isset($this->userConnections[$participantId])) {
+                            $updateData = [
+                                'type' => 'conversation_update',
+                                'conversation_id' => $participant['conversation_id'],
+                                'last_message' => [
+                                    'id' => $lastMessage['id'] ?? null,
+                                    'text' => $lastMessage['message_text'] ?? '',
+                                    'sender_name' => $lastMessage['sender_name'] ?? '',
+                                    'created_at' => $lastMessage['created_at'] ?? date('Y-m-d H:i:s')
+                                ],
+                                'unread_count' => (int)$unreadCount
+                            ];
+                            
+                            try {
+                                $this->userConnections[$participantId]->send(json_encode($updateData));
+                                echo "Successfully sent update to participant $participantId\n";
+                            } catch (\Exception $e) {
+                                echo "Error sending update to participant $participantId: " . $e->getMessage() . "\n";
+                            }
                         } else {
-                            echo "  - Participant $participantId not connected\n";
+                            echo "Skipping update for participant $participantId - " . 
+                                 (!$lastMessage ? "No last message found" : "No WebSocket connection") . "\n";
                         }
                     }
+
                 } catch (\Exception $e) {
                     echo "Error processing message: " . $e->getMessage() . "\n";
                     echo "Stack trace: " . $e->getTraceAsString() . "\n";
