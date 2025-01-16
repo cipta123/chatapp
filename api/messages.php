@@ -72,33 +72,39 @@ function getConversations($studentId) {
     
     $studentId = $conn->real_escape_string($studentId);
     
-    $sql = "SELECT DISTINCT
-        c.id,
-        c.created_at,
-        c.updated_at,
-        s2.name as other_participant_name,
-        m.message_text as last_message,
-        m.created_at as last_message_time,
-        (
-            SELECT COUNT(*)
-            FROM messages msg
-            WHERE msg.conversation_id = c.id
-            AND msg.created_at > COALESCE(cp.last_read_at, '1970-01-01')
-            AND msg.sender_id != '$studentId'
-        ) as unread_count
-    FROM conversations c
-    JOIN conversation_participants cp ON c.id = cp.conversation_id
-    JOIN conversation_participants cp2 ON c.id = cp2.conversation_id AND cp2.student_id != cp.student_id
-    JOIN students s2 ON cp2.student_id = s2.id
-    LEFT JOIN messages m ON m.id = (
-        SELECT id
-        FROM messages
-        WHERE conversation_id = c.id
-        ORDER BY created_at DESC
-        LIMIT 1
+    $sql = "WITH RankedConversations AS (
+        SELECT DISTINCT
+            c.id,
+            c.created_at,
+            c.updated_at,
+            (
+                SELECT s2.name
+                FROM conversation_participants cp2
+                JOIN students s2 ON cp2.student_id = s2.id
+                WHERE cp2.conversation_id = c.id
+                AND cp2.student_id != '$studentId'
+                LIMIT 1
+            ) as other_participant_name,
+            (
+                SELECT message_text
+                FROM messages
+                WHERE conversation_id = c.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) as last_message,
+            (
+                SELECT created_at
+                FROM messages
+                WHERE conversation_id = c.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) as last_message_time
+        FROM conversations c
+        JOIN conversation_participants cp ON c.id = cp.conversation_id
+        WHERE cp.student_id = '$studentId'
     )
-    WHERE cp.student_id = '$studentId'
-    ORDER BY COALESCE(m.created_at, c.created_at) DESC";
+    SELECT * FROM RankedConversations
+    ORDER BY updated_at DESC";
     
     $result = $conn->query($sql);
     
@@ -115,21 +121,6 @@ function getConversations($studentId) {
     }
     
     return $conversations;
-}
-
-// Add new function to mark messages as read
-function markConversationAsRead($conversationId, $userId) {
-    global $conn;
-    
-    $conversationId = $conn->real_escape_string($conversationId);
-    $userId = $conn->real_escape_string($userId);
-    
-    $sql = "UPDATE conversation_participants 
-            SET last_read_at = NOW() 
-            WHERE conversation_id = '$conversationId' 
-            AND student_id = '$userId'";
-    
-    return $conn->query($sql);
 }
 
 // Handle API requests
@@ -156,10 +147,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Send a new message
         $result = sendMessage($data['conversation_id'], $data['sender_id'], $data['message']);
         echo json_encode($result);
-    } elseif (isset($data['conversation_id']) && isset($data['user_id']) && isset($data['mark_read'])) {
-        // Mark conversation as read
-        $result = markConversationAsRead($data['conversation_id'], $data['user_id']);
-        echo json_encode(['success' => $result]);
     } else {
         echo json_encode(['success' => false, 'error' => 'Missing required fields']);
     }

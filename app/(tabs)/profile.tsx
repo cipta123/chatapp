@@ -1,15 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Link, router } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
+  const [userName, setUserName] = useState('');
+  const [userNim, setUserNim] = useState('');
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const storedName = await AsyncStorage.getItem('userName');
+      const storedNim = await AsyncStorage.getItem('userNim');
+      
+      if (storedName) setUserName(storedName);
+      if (storedNim) setUserNim(storedNim);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.clear();
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.avatar} />
-        <Text style={styles.name}>John Doe</Text>
-        <Text style={styles.nim}>NIM: 12345</Text>
+        <Text style={styles.name}>{userName}</Text>
+        <Text style={styles.nim}>NIM: {userNim}</Text>
       </View>
 
       <View style={styles.section}>
@@ -30,34 +59,12 @@ export default function ProfileScreen() {
           <Text style={styles.menuText}>Privacy</Text>
           <FontAwesome name="chevron-right" size={16} color="#666" />
         </TouchableOpacity>
-      </View>
 
-      <Link href="/login" asChild>
-        <TouchableOpacity 
-          style={styles.logoutButton} 
-          onPress={() => {
-            Alert.alert(
-              'Logout',
-              'Are you sure you want to logout?',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                },
-                {
-                  text: 'Logout',
-                  style: 'destructive',
-                  onPress: () => {
-                    router.navigate('/login');
-                  },
-                },
-              ]
-            );
-          }}
-        >
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity style={[styles.menuItem, styles.logoutButton]} onPress={handleLogout}>
+          <FontAwesome name="sign-out" size={20} color="#ff4444" />
+          <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
         </TouchableOpacity>
-      </Link>
+      </View>
     </View>
   );
 }
@@ -65,11 +72,12 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
   },
   header: {
     alignItems: 'center',
     padding: 20,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
@@ -90,7 +98,9 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   section: {
-    padding: 20,
+    marginTop: 20,
+    backgroundColor: 'white',
+    paddingHorizontal: 15,
   },
   menuItem: {
     flexDirection: 'row',
@@ -101,19 +111,14 @@ const styles = StyleSheet.create({
   },
   menuText: {
     flex: 1,
-    fontSize: 16,
     marginLeft: 15,
+    fontSize: 16,
   },
   logoutButton: {
-    margin: 20,
-    padding: 15,
-    backgroundColor: '#ff4444',
-    borderRadius: 8,
-    alignItems: 'center',
+    marginTop: 20,
+    borderBottomWidth: 0,
   },
   logoutText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#ff4444',
   },
 });
